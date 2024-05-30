@@ -1,50 +1,66 @@
 import axios from "axios";
-import fs from "fs"
-import path from "path";
-import { v4 as uuidv4   } from 'uuid';
+import fs from "fs";
+import fsp from "fs/promises";
 import gplay from "google-play-scraper";
-import { fileURLToPath } from 'url';
+import { v4 as uuid } from "uuid";
+import { fileURLToPath } from "url";
+import path from "path";
+import dotenv from "dotenv";
+dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filepath = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filepath);
 
+const directory = path.resolve(__dirname, "files");
 const packageName = "com.ansangha.drdriving";
 
-async function download() {
-  const url = `http://d.apkpure.com/b/APK/${packageName}?version=latest`;
-  const location = path.resolve(__dirname,"files",`${packageName}-${uuidv4()}.apk`);
-  console.log("proccesing..");
-  const response = await axios({
-    url: url,
-    method: "get",
-    responseType: "stream",
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-    },
-  });
+async function Download() {
+  const url = process.env.BASE_URL + `${packageName}?version=latest`;
+  console.log("processing ...");
 
-  console.log("Downloading..");
+  try {
+    const apkName = await gplay.app({ appId: packageName });
+    const location = path.join(directory, `${apkName.title}.apk`);
+    await fsp.mkdir(directory, { recursive: true });
 
-  response.data.pipe(fs.createWriteStream(location));
+    const check = await fsp
+      .access(location)
+      .then(() => true)
+      .catch(() => false);
+    if (check) {
+      console.log(`APK File is Exsist at : ${location}`);
+      return;
+    }
 
-  return new Promise((resolve, reject) => {
-    response.data.on("end", () => {
-      resolve(location);
+    const response = await axios({
+      method: "get",
+      url: url,
+      responseType: "stream",
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+      },
     });
 
-    response.data.on("error", (err) => {
-      reject(err);
+    const writer = fs.createWriteStream(location);
+    response.data.pipe(writer);
+    console.log("downloading..");
+
+    return new Promise((resolve, reject) => {
+      writer.on("end", () => {
+        resolve(location);
+      });
+      writer.on("error", () => {
+        reject(location);
+      });
+      writer.on("finish", () => {
+        console.log(`APK File has been installed at : ${location}`);
+        resolve(location);
+      });
     });
-  });
+  } catch (err) {
+    console.error(err);
+    return;
+  }
 }
 
-download()
-  .then((location) => {
-    console.log(`Download finished at: ${location}`);
-    gplay
-      .app({ appId: packageName })
-      .then(console.log, console.log);
-  })
-  .catch((err) => {
-    console.error("Error occurred during download:", err);
-  });
+Download();
