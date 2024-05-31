@@ -28,7 +28,7 @@ async function Download() {
       .then(() => true)
       .catch(() => false);
     if (check) {
-      console.log(`APK File is Exsist at : ${location}`);
+      console.log(`APK File is Exist at : ${location}`);
       return;
     }
 
